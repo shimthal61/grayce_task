@@ -1,0 +1,77 @@
+---
+output: reprex::reprex_document
+knit: reprex::reprex_render
+---
+
+# Packages
+
+Let's first load in the packages needed for this task using the `library()` function.
+
+```{r}
+library(tidyverse)
+library(visdat)
+```
+
+We then read in our dataset using the `read_csv()` function.
+
+```{r}
+raw_data <- read_csv("raw_data.csv")
+```
+
+We can use the `vis_miss()` function from the library `visdat` to identify any areas which are missing data.
+
+```{r}
+vis_miss(raw_data)
+```
+
+`vis_miss()` creates a visualisation of all the missing data in our dataset and shows us where the data are missing. It appears as though all the values below 150 are missing. This is not surprising, considering that we were given a sample dataset of 500. We can also see that there are columnms which contain only `NA` values. The code below creates a new dataset containing only the first 500 rows, as well as the columns which contain at least 1 non-NA observation.
+
+```{r}
+data <- head(raw_data, 500)
+data <- data[, colSums(is.na(data)) < nrow(data)]
+data$LOYALTY <- toupper(data$LOYALTY)
+```
+
+Let's have another look at the missing data using `vis_miss()`
+
+```{r}
+vis_miss(data)
+```
+
+This is better - the appropriate NA data have been removed. We can view the first 10 observations using the `head()` function
+
+```{r}
+head(data, 10)
+```
+
+Interestingly, it appears as though `CUST_REGION` and `CUST_AREA` may be identical. We can use the `identical` function to asseess this claim.
+
+```{r}
+identical(data$CUST_REGION, data$CUST_AREA)
+```
+
+We can see that they are, in fact, identical. Let's remove the `CUST_AREA` column from the dataset
+
+```{r}
+data <- data %>% 
+    select(!CUST_AREA)
+```
+
+```{r}
+data %>% 
+    group_by(LOYALTY) %>% 
+    summarise(mean_sale = mean(TOTAL_COST), sd_sale = mean(TOTAL_COST)) %>% 
+    arrange(-mean_sale)
+```
+
+
+```{r}
+data %>% 
+    str_to_upper(data$LOYALTY)
+```
+
+```{r}
+data %>% 
+    ggplot(aes(x = LOYALTY, y = TOTAL_COST, color = LOYALTY)) +
+    geom_bar()
+```
