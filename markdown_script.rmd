@@ -10,6 +10,9 @@ Let's first load in the packages needed for this task using the `library()` func
 ```{r}
 library(tidyverse)
 library(visdat)
+library(lme4)
+library(lmerTest)
+library(emmeans)
 ```
 
 We then read in our dataset using the `read_csv()` function.
@@ -27,9 +30,21 @@ vis_miss(raw_data)
 `vis_miss()` creates a visualisation of all the missing data in our dataset and shows us where the data are missing. It appears as though all the values below 150 are missing. This is not surprising, considering that we were given a sample dataset of 500. We can also see that there are columnms which contain only `NA` values. The code below creates a new dataset containing only the first 500 rows, as well as the columns which contain at least 1 non-NA observation.
 
 ```{r}
-data <- head(raw_data, 500)
-data <- data[, colSums(is.na(data)) < nrow(data)]
-data$LOYALTY <- toupper(data$LOYALTY)
+data <- head(raw_data, 500) # We select only the first 500 rows
+data <- data %>%
+    mutate(TRANS_DATE = MONTH) %>%
+    select(!MONTH)
+data <- data[, colSums(is.na(data)) < nrow(data)] # We remove columns which are all NA
+data$LOYALTY <- toupper(data$LOYALTY) # We made all the labels for LOYALTY upper case
+data <- data %>% 
+    mutate(LOYALTY = factor(LOYALTY)) # We factorise LOYALTY
+     
+
+# We run an if statement to see if CUST_AREA and CUST_REGION are identical. If so, we remove CUST_AREA
+if(all(sapply(list(data$CUST_AREA, data$CUST_REGION), FUN = identical, data$REGION)) == TRUE) {
+    data <- data %>%
+        select(!CUST_AREA & !CUST_REGION)
+}
 ```
 
 Let's have another look at the missing data using `vis_miss()`
@@ -46,32 +61,34 @@ head(data, 10)
 
 Interestingly, it appears as though `CUST_REGION` and `CUST_AREA` may be identical. We can use the `identical` function to asseess this claim.
 
-```{r}
-identical(data$CUST_REGION, data$CUST_AREA)
-```
-
 We can see that they are, in fact, identical. Let's remove the `CUST_AREA` column from the dataset
 
 ```{r}
-data <- data %>% 
-    select(!CUST_AREA)
+data %>%
+    ggplot(aes(x = LOYALTY, y = VALUE, colour = LOYALTY)) +
+    geom_violin(width = 0.5, lwd = 0.7) +
+    geom_point(alpha = 0.2, position = position_jitter(width = 0.08, seed = 42)) +
+    guides(fill = "none") +
+    stat_summary(fun.data = "mean_cl_boot", colour = 'black') +
+    labs(x = "Customer Loyalty",
+        y = "Item Value",
+        title = "Effect of Customer Loyalty on Item Value") +
+        theme_minimal()
 ```
 
 ```{r}
-data %>% 
-    group_by(LOYALTY) %>% 
-    summarise(mean_sale = mean(TOTAL_COST), sd_sale = mean(TOTAL_COST)) %>% 
-    arrange(-mean_sale)
+ggplot(summary_stats, aes(x = LOYALTY, y = mean_sale, fill = LOYALTY)) +
+    geom_col() +
+    theme_minimal() +
+    guides(fill = "none") +
+    labs(x = "CUSTOMER LOYALTY",
+        y = "Mean Total Spent",
+        title = "The Effect of Customer Loyalty on Mean Money Spent")
 ```
 
+Let's build a linear model to assess whether `LOYALTY` had a significant effect on `TOTAL_COST`
 
 ```{r}
-data %>% 
-    str_to_upper(data$LOYALTY)
-```
-
-```{r}
-data %>% 
-    ggplot(aes(x = LOYALTY, y = TOTAL_COST, color = LOYALTY)) +
-    geom_bar()
+loyal_model <- lmer(VALUE ~ LOYALTY + (1 + LOYALTY | NO_OF_ITEMS) + (1 + LOYALTY | LOYALTY_ID),
+                    data = data)
 ```
