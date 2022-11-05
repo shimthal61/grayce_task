@@ -143,18 +143,40 @@ reg_sum %>%
     theme_minimal() +
     labs(x = "Transaction Date",
         y = "Mean Item Value",
-        title = "Mean Amount of Money Spent in GL and WM Over the Previous Year") +
-    theme(text = element_text(size = 15))
+        title = "Mean Amount of Money Spent 
+        in GL and WM\nOver the Previous Year") +
+    theme(text = element_text(size = 30),
+        plot.title = element_text(size = 30,
+        hjust = 0.5, margin = margin(b = 20), face = "bold"),
+        axis.text.x = element_text(angle = 45))
 ```
 
-data %>%
-    filter(REGION == "GL") %>%
+
+reg_sum %>%
     mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
-            "Jan-19", "Feb-19", "Mar-19",
-            "Jun-19", "Jul-19", "Aug-19",
-            "Sep-19", "Oct-19", "Nov-19",
-            "Dec-19")) %>%
-    summarise(mean = mean(VALUE))
+            "Jan-19", "Mar-19", "Apr-19",
+            "May-19", "Jun-19", "Jul-19",
+            "Aug-19", "Sep-19", "Oct-19",
+            "Nov-19", "Dec-19")) %>%
+    ggplot(aes(x = TRANS_DATE, y = mean, fill = TRANS_DATE)) +
+    geom_col() +
+    geom_segment()
+    geom_text(aes(x = "Aug-19",
+                y = 60),
+                label = "Promotion\n Introduced",
+                angle = 45,
+                size = 10) +
+    guides(fill = "none") +
+    theme_minimal() +
+    labs(x = "Transaction Date",
+        y = "Mean Item Value",
+        title = "Mean Amount of Money Spent 
+        in GL and WM\nOver the Previous Year") +
+    theme(text = element_text(size = 30),
+        plot.title = element_text(size = 30,
+        hjust = 0.5, margin = margin(b = 20), face = "bold"),
+        axis.text.x = element_text(angle = 45))
+
 
 Our next model assesses whether `REGION` had a significant effect on VALUE
 
