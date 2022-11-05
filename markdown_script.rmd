@@ -13,6 +13,8 @@ library(visdat)
 library(lme4)
 library(lmerTest)
 library(emmeans)
+library(buildmer)
+library(performance)
 ```
 
 We then read in our dataset using the `read_csv()` function.
@@ -36,9 +38,8 @@ data <- data %>%
     select(!MONTH)
 data <- data[, colSums(is.na(data)) < nrow(data)] # We remove columns which are all NA
 data$LOYALTY <- toupper(data$LOYALTY) # We made all the labels for LOYALTY upper case
-data <- data %>% 
+data <- data %>%
     mutate(LOYALTY = factor(LOYALTY)) # We factorise LOYALTY
-     
 
 # We run an if statement to see if CUST_AREA and CUST_REGION are identical. If so, we remove CUST_AREA
 if(all(sapply(list(data$CUST_AREA, data$CUST_REGION), FUN = identical, data$REGION)) == TRUE) {
@@ -67,9 +68,10 @@ We can see that they are, in fact, identical. Let's remove the `CUST_AREA` colum
 data %>%
     ggplot(aes(x = LOYALTY, y = VALUE, colour = LOYALTY)) +
     geom_violin(width = 0.5, lwd = 0.7) +
-    geom_point(alpha = 0.2, position = position_jitter(width = 0.08, seed = 42)) +
+    geom_point(alpha = 0.2,
+        position = position_jitter(width = 0.08, seed = 42)) +
     guides(fill = "none") +
-    stat_summary(fun.data = "mean_cl_boot", colour = 'black') +
+    stat_summary(fun.data = "mean_cl_boot", colour = "black") +
     labs(x = "Customer Loyalty",
         y = "Item Value",
         title = "Effect of Customer Loyalty on Item Value") +
@@ -86,9 +88,58 @@ ggplot(summary_stats, aes(x = LOYALTY, y = mean_sale, fill = LOYALTY)) +
         title = "The Effect of Customer Loyalty on Mean Money Spent")
 ```
 
+# Building Our Models
+
 Let's build a linear model to assess whether `LOYALTY` had a significant effect on `TOTAL_COST`
 
 ```{r}
-loyal_model <- lmer(VALUE ~ LOYALTY + (1 + LOYALTY | NO_OF_ITEMS) + (1 + LOYALTY | LOYALTY_ID),
-                    data = data)
+loyal_model <- buildmer(VALUE ~ LOYALTY +
+    (1 + LOYALTY | LOYALTY_ID) +
+    (1 + LOYALTY | TRANS_ID) +
+    (1 + LOYALTY | NO_OF_ITEMS) +
+    (1 + LOYALTY | ITEM_VOL) +
+    (1 + LOYALTY | LOYALTY_ID) +
+    (1 + LOYALTY | DELIVERY_METHOD) +
+    (1 + LOYALTY | DELIVERY_COST) +
+    (1 + LOYALTY | ITEM_VOLUME),
+    buildmerControl = buildmerControl(direction = "order"),
+    data = data)
+summary(loyal_model)
+```
+
+It appears as though `LOYALTY` did not have a significant effect on `VALUE` of item (*p* = .191)
+
+
+Our next model assesses whether `REGION` had a significant effect on VALUE
+
+```{r}
+region_model <- buildmer(VALUE ~ REGION +
+    (1 + REGION | LOYALTY_ID) +
+    (1 + REGION | TRANS_ID) +
+    (1 + REGION | NO_OF_ITEMS) +
+    (1 + REGION | ITEM_VOL) +
+    (1 + REGION | LOYALTY_ID) +
+    (1 + REGION | DELIVERY_METHOD) +
+    (1 + REGION | DELIVERY_COST) +
+    (1 + REGION | ITEM_VOLUME),
+    buildmerControl = buildmerControl(direction = "order"),
+    data = data)
+summary(region_model)
+```
+
+This final model examines any interactions between LOYALTY and REGION on VALUE. 
+
+```{r}
+mixed_model <- buildmer(VALUE ~ LOYALTY * REGION + 
+    (1 + LOYALTY * REGION | LOYALTY_ID) +
+    (1 + LOYALTY * REGION | TRANS_ID) +
+    (1 + LOYALTY * REGION | NO_OF_ITEMS) +
+    (1 + LOYALTY * REGION | ITEM_VOL) +
+    (1 + LOYALTY * REGION | LOYALTY_ID) +
+    (1 + LOYALTY * REGION | DELIVERY_METHOD) +
+    (1 + LOYALTY * REGION | DELIVERY_COST) +
+    (1 + LOYALTY * REGION | ITEM_VOLUME),
+    buildmerControl = buildmerControl(direction = "order"),
+    data = data)
+summary(mixed_model)
 ```
