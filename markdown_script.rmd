@@ -42,7 +42,7 @@ data <- data %>%
     mutate(LOYALTY = factor(LOYALTY)) # We factorise LOYALTY
 
 # We run an if statement to see if CUST_AREA and CUST_REGION are identical. If so, we remove CUST_AREA
-if(all(sapply(list(data$CUST_AREA, data$CUST_REGION), FUN = identical, data$REGION)) == TRUE) {
+if (all(sapply(list(data$CUST_AREA, data$CUST_REGION), FUN = identical, data$REGION)) == TRUE) {
     data <- data %>%
         select(!CUST_AREA & !CUST_REGION)
 }
@@ -109,8 +109,55 @@ summary(loyal_model)
 
 It appears as though `LOYALTY` did not have a significant effect on `VALUE` of item (*p* = .191)
 
+# Region
+
+Let's have a look at some summary stats for `REGION`. 
+
+```{r}
+(reg_sum <- data %>%
+    filter(REGION == "GL" | REGION == "WM") %>%
+    group_by(TRANS_DATE) %>%
+    summarise(mean = mean(VALUE), sd = sd(VALUE)) %>%
+    arrange(-mean))
+```
+
+```{r}
+reg_sum %>%
+    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+            "Jan-19", "Mar-19", "Apr-19",
+            "May-19", "Jun-19", "Jul-19",
+            "Aug-19", "Sep-19", "Oct-19",
+            "Nov-19", "Dec-19")) %>%
+    ggplot(aes(x = TRANS_DATE, y = mean, fill = TRANS_DATE)) +
+    geom_col() +
+    geom_vline(xintercept = "Aug-19",
+                linetype = "dotted",
+                colour = "red",
+                size = 2) +
+    geom_text(aes(x = "Aug-19",
+                y = 60),
+                label = "Promotion\n Introduced",
+                angle = 45,
+                size = 10) +
+    guides(fill = "none") +
+    theme_minimal() +
+    labs(x = "Transaction Date",
+        y = "Mean Item Value",
+        title = "Mean Amount of Money Spent in GL and WM Over the Previous Year") +
+    theme(text = element_text(size = 15))
+```
+
+data %>%
+    filter(REGION == "GL") %>%
+    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+            "Jan-19", "Feb-19", "Mar-19",
+            "Jun-19", "Jul-19", "Aug-19",
+            "Sep-19", "Oct-19", "Nov-19",
+            "Dec-19")) %>%
+    summarise(mean = mean(VALUE))
 
 Our next model assesses whether `REGION` had a significant effect on VALUE
+
 
 ```{r}
 region_model <- buildmer(VALUE ~ REGION +
@@ -130,7 +177,7 @@ summary(region_model)
 This final model examines any interactions between LOYALTY and REGION on VALUE. 
 
 ```{r}
-mixed_model <- buildmer(VALUE ~ LOYALTY * REGION + 
+mixed_model <- buildmer(VALUE ~ LOYALTY * REGION +
     (1 + LOYALTY * REGION | LOYALTY_ID) +
     (1 + LOYALTY * REGION | TRANS_ID) +
     (1 + LOYALTY * REGION | NO_OF_ITEMS) +
