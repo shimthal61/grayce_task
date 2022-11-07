@@ -64,31 +64,36 @@ Interestingly, it appears as though `CUST_REGION` and `CUST_AREA` may be identic
 
 We can see that they are, in fact, identical. Let's remove the `CUST_AREA` column from the dataset
 
-```{r}
-data %>%
-    ggplot(aes(x = LOYALTY, y = VALUE, colour = LOYALTY)) +
-    geom_violin(width = 0.5, lwd = 0.7) +
-    geom_point(alpha = 0.2,
-        position = position_jitter(width = 0.08, seed = 42)) +
-    guides(fill = "none") +
-    stat_summary(fun.data = "mean_cl_boot", colour = "black") +
-    labs(x = "Customer Loyalty",
-        y = "Item Value",
-        title = "Effect of Customer Loyalty on Item Value") +
-        theme_minimal()
-```
+# Loyalty
+
+## Summary Statistics
+
+Let's create some summary stats of `LOYALTY`.
 
 ```{r}
-ggplot(summary_stats, aes(x = LOYALTY, y = mean_sale, fill = LOYALTY)) +
+(loy_sum <- data %>%
+    group_by(LOYALTY) %>%
+    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
+    arrange(-mean_value))
+```
+
+## Visualisations
+
+```{r}
+loy_sum %>%
+    ggplot(aes(x = LOYALTY, y = mean_value, fill = LOYALTY)) +
     geom_col() +
     theme_minimal() +
     guides(fill = "none") +
-    labs(x = "CUSTOMER LOYALTY",
-        y = "Mean Total Spent",
-        title = "The Effect of Customer Loyalty on Mean Money Spent")
+    labs(x = "Loyalty Scheme",
+        y = "Mean Value",
+        title = "The Effect of Customer Loyalty on Mean Value") +
+        theme(text = element_text(size = 25),
+                plot.title = element_text(size = 30,
+                hjust = 0.5, margin = margin(b = 20)))
 ```
 
-# Building Our Models
+## Linear Model
 
 Let's build a linear model to assess whether `LOYALTY` had a significant effect on `TOTAL_COST`
 
@@ -111,14 +116,83 @@ It appears as though `LOYALTY` did not have a significant effect on `VALUE` of i
 
 # Region
 
-Let's have a look at some summary stats for `REGION`. 
+## National Promotion
+
+Let's have a look at some summary stats for `REGION`. Let's first have a look at the April and May promotion
 
 ```{r}
-(reg_sum <- data %>%
-    filter(REGION == "GL" | REGION == "WM") %>%
+(Nat_pro_sum <- data %>%
     group_by(TRANS_DATE) %>%
-    summarise(mean = mean(VALUE), sd = sd(VALUE)) %>%
-    arrange(-mean))
+    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
+    arrange(-mean_value))
+```
+
+```{r}
+Nat_pro_sum %>%
+    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+            "Jan-19", "Feb-19", "Mar-19",
+            "Apr-19", "May-19", "Jun-19",
+            "Jul-19", "Aug-19", "Sep-19",
+            "Oct-19", "Nov-19", "Dec-19")) %>%
+    ggplot(aes(x = TRANS_DATE, y = mean_value,
+            fill = factor(ifelse(TRANS_DATE == "Apr-19" | TRANS_DATE == "May-19",
+            "Highlighted", "Normal")))) +
+    geom_col() +
+    geom_text(aes(x = "May-19",
+                  y = 58),
+                  label = "National\nSpring Clean\nPromotion",
+                  angle = 40,
+                  size = 9,
+                  position = position_nudge(x = -0.45)) +
+    guides(fill = "none") +
+    theme_minimal() +
+    labs(x = "Transaction Date",
+        y = "Mean Transaction Value",
+        title = "Mean Transaction Value\nOver the Previous Year") +
+    theme(text = element_text(size = 30),
+        plot.title = element_text(size = 35,
+          hjust = 0.5, margin(b = 25), face = "bold"),
+        axis.text.x = element_text(angle = 45))
+
+```
+
+### Building our model
+
+```{r}
+ordered_data <- data %>%
+    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+            "Jan-19", "Feb-19", "Mar-19",
+            "Apr-19", "May-19", "Jun-19",
+            "Jul-19", "Aug-19", "Sep-19",
+            "Oct-19", "Nov-19", "Dec-19"))
+date_model <- lm(VALUE ~ TRANS_DATE,
+    data = ordered_data)
+summary(date_model)
+```
+
+It looks as though the promotions run in `Apr-19` and `May-19` did not have a signficiant impact on `VALUE`. 
+
+## GL and WM Promotion
+
+```{r}
+gl_wm_data <- data %>%
+filter(REGION == "GL" | REGION == "WM") %>%
+mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+            "Jan-19", "Mar-19",
+            "Apr-19", "May-19", "Jun-19",
+            "Jul-19", "Aug-19", "Sep-19",
+            "Oct-19", "Nov-19", "Dec-19"))
+```
+
+## Summary Stats
+
+Let's now generate some summary statistics 
+
+```{r}
+(reg_sum <- gl_wm_data %>%
+    group_by(TRANS_DATE) %>%
+    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
+    arrange(-mean_value))
 ```
 
 ```{r}
@@ -128,73 +202,31 @@ reg_sum %>%
             "May-19", "Jun-19", "Jul-19",
             "Aug-19", "Sep-19", "Oct-19",
             "Nov-19", "Dec-19")) %>%
-    ggplot(aes(x = TRANS_DATE, y = mean, fill = TRANS_DATE)) +
+    ggplot(aes(x = TRANS_DATE, y = mean_value,
+    fill = factor(ifelse(TRANS_DATE == "Aug-19", "Highlighted", "Normal")))) +
     geom_col() +
-    geom_vline(xintercept = "Aug-19",
-                linetype = "dotted",
-                colour = "red",
-                size = 2) +
-    geom_text(aes(x = "Aug-19",
-                y = 60),
-                label = "Promotion\n Introduced",
-                angle = 45,
-                size = 10) +
     guides(fill = "none") +
     theme_minimal() +
     labs(x = "Transaction Date",
-        y = "Mean Item Value",
-        title = "Mean Amount of Money Spent 
-        in GL and WM\nOver the Previous Year") +
+        y = "Mean Transaction Value",
+        title = "Mean Amount of Money Spent in GL and WM\nOver the Previous Year") +
     theme(text = element_text(size = 30),
         plot.title = element_text(size = 30,
         hjust = 0.5, margin = margin(b = 20), face = "bold"),
         axis.text.x = element_text(angle = 45))
 ```
 
+## Building our Model
 
-reg_sum %>%
-    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
-            "Jan-19", "Mar-19", "Apr-19",
-            "May-19", "Jun-19", "Jul-19",
-            "Aug-19", "Sep-19", "Oct-19",
-            "Nov-19", "Dec-19")) %>%
-    ggplot(aes(x = TRANS_DATE, y = mean, fill = TRANS_DATE)) +
-    geom_col() +
-    geom_segment()
-    geom_text(aes(x = "Aug-19",
-                y = 60),
-                label = "Promotion\n Introduced",
-                angle = 45,
-                size = 10) +
-    guides(fill = "none") +
-    theme_minimal() +
-    labs(x = "Transaction Date",
-        y = "Mean Item Value",
-        title = "Mean Amount of Money Spent 
-        in GL and WM\nOver the Previous Year") +
-    theme(text = element_text(size = 30),
-        plot.title = element_text(size = 30,
-        hjust = 0.5, margin = margin(b = 20), face = "bold"),
-        axis.text.x = element_text(angle = 45))
-
+```{r}
+gl_wm_model <- lmer(VALUE ~ TRANS_DATE +
+                   (1 + TRANS_DATA | ITEM_COST),
+                   data = gl_wm_data)
+summary(gl_wm_model)
+```
 
 Our next model assesses whether `REGION` had a significant effect on VALUE
 
-
-```{r}
-region_model <- buildmer(VALUE ~ REGION +
-    (1 + REGION | LOYALTY_ID) +
-    (1 + REGION | TRANS_ID) +
-    (1 + REGION | NO_OF_ITEMS) +
-    (1 + REGION | ITEM_VOL) +
-    (1 + REGION | LOYALTY_ID) +
-    (1 + REGION | DELIVERY_METHOD) +
-    (1 + REGION | DELIVERY_COST) +
-    (1 + REGION | ITEM_VOLUME),
-    buildmerControl = buildmerControl(direction = "order"),
-    data = data)
-summary(region_model)
-```
 
 This final model examines any interactions between LOYALTY and REGION on VALUE. 
 
