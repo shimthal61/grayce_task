@@ -15,6 +15,8 @@ library(lmerTest)
 library(emmeans)
 library(buildmer)
 library(performance)
+library(rempsyc)
+library(pbkrtest)
 ```
 
 We then read in our dataset using the `read_csv()` function.
@@ -26,7 +28,7 @@ raw_data <- read_csv("raw_data.csv")
 We can use the `vis_miss()` function from the library `visdat` to identify any areas which are missing data.
 
 ```{r}
-vis_miss(raw_data)
+(mis_raw_data <- vis_miss(raw_data))
 ```
 
 `vis_miss()` creates a visualisation of all the missing data in our dataset and shows us where the data are missing. It appears as though all the values below 150 are missing. This is not surprising, considering that we were given a sample dataset of 500. We can also see that there are columnms which contain only `NA` values. The code below creates a new dataset containing only the first 500 rows, as well as the columns which contain at least 1 non-NA observation.
@@ -64,6 +66,90 @@ Interestingly, it appears as though `CUST_REGION` and `CUST_AREA` may be identic
 
 We can see that they are, in fact, identical. Let's remove the `CUST_AREA` column from the dataset
 
+# All Transactions across regions
+
+## Summary Stats
+
+```{r}
+(all_reg_sum <- data %>%
+            group_by(REGION) %>%
+            summarise(mean = mean(TOTAL_COST), sd = sd(TOTAL_COST)) %>%
+            arrange(-mean))
+```
+
+## Visualisation
+
+```{r}
+(reg_plot <- all_reg_sum %>%
+                mutate(REGION = fct_reorder(REGION, desc(mean))) %>%
+                ggplot(aes(x = REGION, y = mean, fill = REGION)) +
+                geom_col(colour = "black") +
+                theme_minimal() +
+                labs(x = "Region",
+                     y = "Mean Transaction Value",
+                     title = "Mean Transaction Value across all Regions") +
+                scale_x_discrete(labels = c("EM" = "East Midlands",
+                                            "GL" = "Greater London",
+                                            "NE" = "North East",
+                                            "NW" = "North West",
+                                            "SC" = "Scotland",
+                                            "SE" = "South East",
+                                            "SW" = "South West",
+                                            "WL" = "Wales",
+                                            "WM" = "West Midlands",
+                                            "EE" = "East of England",
+                                            "YH" = "Yorkshire")) +
+                guides(fill = "none") +
+                theme(text = element_text(size = 25),
+                plot.title = element_text(face = "bold",
+                                          margin = margin(b = 20),
+                                          hjust = 0.5),
+                axis.title.x = element_text(vjust = 2),
+                axis.title.y = element_text(margin = margin(r = 10)),
+                axis.text.y = element_text(margin = margin(r = 10)),
+                axis.text.x = element_text(angle = 45, vjust = 0.6)))
+ggsave(filename = "region_plot.png", plot = reg_plot)
+```
+
+# The Previous Year
+
+```{r}
+(prev_year_sum <- data %>%
+                    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+                    "Jan-19", "Feb-19", "Mar-19",
+                    "Apr-19", "May-19", "Jun-19",
+                    "Jul-19", "Aug-19", "Sep-19",
+                    "Oct-19", "Nov-19", "Dec-19")) %>%
+                    group_by(TRANS_DATE) %>%
+                    summarise(mean = mean(TOTAL_COST), sd = sd(TOTAL_COST)) %>%
+                    arrange(-mean))
+```
+
+```{r}
+(prev_year_plot <- prev_year_sum %>%
+                    mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
+                    "Jan-19", "Feb-19", "Mar-19",
+                    "Apr-19", "May-19", "Jun-19",
+                    "Jul-19", "Aug-19", "Sep-19",
+                    "Oct-19", "Nov-19", "Dec-19")) %>%
+                    ggplot(aes(x = TRANS_DATE, y = mean, fill = TRANS_DATE)) +
+                    geom_col(colour = "black") +
+                    theme_minimal() +
+                    guides(colour = "none")) +
+                    guides(fill = "none") +
+                    labs(x = "Transaction Date",
+                            y = "Mean Transaction Value",
+                            title = "Mean Transaction Value Across\nthe Previous Year") +
+                    theme(text = element_text(size = 30),
+          plot.title = element_text(size = 35,
+                                    hjust = 0.5,
+                                    margin = margin(b = 30),
+                                    face = "bold"),
+          axis.title.y = element_text(margin = margin(r = 10)),
+          axis.text.x = element_text(angle = 45, margin = margin(t = 10)))
+ggsave(filename = "year_plot1.png", plot = prev_year_plot)
+```
+
 # Loyalty
 
 ## Summary Statistics
@@ -73,24 +159,31 @@ Let's create some summary stats of `LOYALTY`.
 ```{r}
 (loy_sum <- data %>%
     group_by(LOYALTY) %>%
-    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
-    arrange(-mean_value))
+    summarise(mean_transaction_value = mean(TOTAL_COST), SD_transaction_value = sd(TOTAL_COST)) %>%
+    arrange(-mean_transaction_value))
+nice_table(loy_sum)
 ```
 
 ## Visualisations
 
 ```{r}
-loy_sum %>%
-    ggplot(aes(x = LOYALTY, y = mean_value, fill = LOYALTY)) +
-    geom_col() +
+(loy_plot <- loy_sum %>%
+    ggplot(aes(x = LOYALTY, y = mean_transaction_value, fill = LOYALTY)) +
+    geom_col(colour = "black") +
+    geom_errorbar(aes(ymin = mean_transaction_value - SD_transaction_value,
+                      ymax = mean_transaction_value + SD_transaction_value),
+                      width = 0.2,
+                      size = 1.5) +
     theme_minimal() +
     guides(fill = "none") +
     labs(x = "Loyalty Scheme",
-        y = "Mean Value",
-        title = "The Effect of Customer Loyalty on Mean Value") +
-        theme(text = element_text(size = 25),
+        y = "Mean Transaction Value",
+        title = "The Effect of Customer Loyalty Sceme\non Mean Transaction Value") +
+        theme(text = element_text(size = 30),
                 plot.title = element_text(size = 30,
-                hjust = 0.5, margin = margin(b = 20)))
+                hjust = 0.5, margin = margin(b = 30),
+                face = "bold")))
+ggsave(filename = "loy_plot.png")
 ```
 
 ## Linear Model
@@ -98,7 +191,7 @@ loy_sum %>%
 Let's build a linear model to assess whether `LOYALTY` had a significant effect on `TOTAL_COST`
 
 ```{r}
-loyal_model <- buildmer(VALUE ~ LOYALTY +
+loyal_model <- buildmer(TOTAL_COST ~ LOYALTY +
     (1 + LOYALTY | LOYALTY_ID) +
     (1 + LOYALTY | TRANS_ID) +
     (1 + LOYALTY | NO_OF_ITEMS) +
@@ -114,6 +207,8 @@ summary(loyal_model)
 
 It appears as though `LOYALTY` did not have a significant effect on `VALUE` of item (*p* = .191)
 
+loyal_model@model
+
 # Region
 
 ## National Promotion
@@ -121,39 +216,36 @@ It appears as though `LOYALTY` did not have a significant effect on `VALUE` of i
 Let's have a look at some summary stats for `REGION`. Let's first have a look at the April and May promotion
 
 ```{r}
-(Nat_pro_sum <- data %>%
+(nat_pro_sum <- data %>%
     group_by(TRANS_DATE) %>%
-    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
-    arrange(-mean_value))
+    summarise(mean_transaction_value = mean(TOTAL_COST), sd_transaction_value = sd(TOTAL_COST)) %>%
+    arrange(-mean_transaction_value))
+nice_table(nat_pro_sum)
 ```
 
 ```{r}
-Nat_pro_sum %>%
+(nat_pro_plot <- nat_pro_sum %>%
     mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
             "Jan-19", "Feb-19", "Mar-19",
             "Apr-19", "May-19", "Jun-19",
             "Jul-19", "Aug-19", "Sep-19",
             "Oct-19", "Nov-19", "Dec-19")) %>%
-    ggplot(aes(x = TRANS_DATE, y = mean_value,
+    ggplot(aes(x = TRANS_DATE, y = mean_transaction_value,
             fill = factor(ifelse(TRANS_DATE == "Apr-19" | TRANS_DATE == "May-19",
             "Highlighted", "Normal")))) +
-    geom_col() +
-    geom_text(aes(x = "May-19",
-                  y = 58),
-                  label = "National\nSpring Clean\nPromotion",
-                  angle = 40,
-                  size = 9,
-                  position = position_nudge(x = -0.45)) +
+    geom_col(colour = "black") +
     guides(fill = "none") +
     theme_minimal() +
     labs(x = "Transaction Date",
         y = "Mean Transaction Value",
         title = "Mean Transaction Value\nOver the Previous Year") +
     theme(text = element_text(size = 30),
-        plot.title = element_text(size = 35,
-          hjust = 0.5, margin(b = 25), face = "bold"),
-        axis.text.x = element_text(angle = 45))
-
+          plot.title = element_text(size = 35,
+                                    hjust = 0.5,
+                                    margin = margin(b = 30),
+                                    face = "bold"),
+          axis.title.y = element_text(margin = margin(r = 10)),
+          axis.text.x = element_text(angle = 45, margin = margin(t = 10))))
 ```
 
 ### Building our model
@@ -165,12 +257,79 @@ ordered_data <- data %>%
             "Apr-19", "May-19", "Jun-19",
             "Jul-19", "Aug-19", "Sep-19",
             "Oct-19", "Nov-19", "Dec-19"))
-date_model <- lm(VALUE ~ TRANS_DATE,
+date_model <- lm(TOTAL_COST ~ TRANS_DATE,
     data = ordered_data)
 summary(date_model)
 ```
 
-It looks as though the promotions run in `Apr-19` and `May-19` did not have a signficiant impact on `VALUE`. 
+It looks as though the promotions run in `Apr-19` and `May-19` did not have a signficiant impact on `VALUE`.
+
+However, transactions in March were significantly greater. Let's investigate that further.
+
+### Creating March Dataset
+
+```{r}
+march_data <- data %>%
+                filter(TRANS_DATE == "Mar-19")
+```
+
+### March summary stats
+
+```{r}
+(march_sum <- march_data %>%
+                group_by(REGION, LOYALTY) %>%
+                summarise(mean_transaction_value = mean(TOTAL_COST)) %>%
+                arrange(REGION))
+```
+
+### March Visualisation
+
+```{r}
+(march_plot <- march_sum %>%
+                ggplot(aes(x = REGION, y = mean_transaction_value, fill = LOYALTY)) +
+                geom_col(colour = "black") +
+                theme_minimal() +
+                labs(x = "Region",
+                     y = "Mean Transaction Value",
+                     title = "March Mean Transaction Value across\nRegions and Loyalty Scheme") +
+                scale_x_discrete(labels = c("EM" = "East Midlands",
+                                            "GL" = "Greater London",
+                                            "NE" = "North East",
+                                            "NW" = "North West",
+                                            "SC" = "Scotland",
+                                            "SE" = "South East",
+                                            "SW" = "South West",
+                                            "WL" = "Wales",
+                                            "WM" = "West Midlands")) +
+                scale_fill_discrete(name = "Customer\nLoyalty",
+                                    labels = c("No", "Yes")) +
+                theme(text = element_text(size = 25),
+                plot.title = element_text(face = "bold",
+                                          margin = margin(b = 20),
+                                          hjust = 0.5),
+                axis.title.x = element_text(vjust = 5),
+                axis.title.y = element_text(margin = margin(r = 10)),
+                axis.text.y = element_text(margin = margin(r = 10)),
+                axis.text.x = element_text(angle = 45, vjust = 0.6)))
+ggsave(filename = "march_plot.png", plot = march_plot)
+```
+
+### Building our March model
+
+```{r}
+march_model <- buildmer(TOTAL_COST ~ REGION * LOYALTY +
+                       (1 + REGION * LOYALTY | LOYALTY_ID) +
+                       (1 + REGION * LOYALTY | TRANS_ID) +
+                       (1 + REGION * LOYALTY | NO_OF_ITEMS) +
+                       (1 + REGION * LOYALTY | ITEM_VOL) +
+                       (1 + REGION * LOYALTY | LOYALTY_ID) +
+                       (1 + REGION * LOYALTY | DELIVERY_METHOD) +
+                       (1 + REGION * LOYALTY | DELIVERY_COST) +
+                       (1 + REGION * LOYALTY | ITEM_VOLUME),
+                       buildmerControl = buildmerControl(direction = "order"),
+                       data = march_data)
+summary(march_model)
+```
 
 ## GL and WM Promotion
 
@@ -189,49 +348,129 @@ mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
 Let's now generate some summary statistics 
 
 ```{r}
-(reg_sum <- gl_wm_data %>%
+(gl_wm_sum <- gl_wm_data %>%
     group_by(TRANS_DATE) %>%
-    summarise(mean_value = mean(VALUE), sd_value = sd(VALUE)) %>%
-    arrange(-mean_value))
+    summarise(mean_transaction_value = mean(TOTAL_COST), sd_transaction_value = sd(TOTAL_COST)) %>%
+    arrange(-mean_transaction_value))
 ```
 
+## Visualisation
+
 ```{r}
-reg_sum %>%
+(gl_wm_plot <- gl_wm_sum %>%
     mutate(TRANS_DATE = fct_relevel(TRANS_DATE,
             "Jan-19", "Mar-19", "Apr-19",
             "May-19", "Jun-19", "Jul-19",
             "Aug-19", "Sep-19", "Oct-19",
             "Nov-19", "Dec-19")) %>%
-    ggplot(aes(x = TRANS_DATE, y = mean_value,
+    ggplot(aes(x = TRANS_DATE, y = mean_transaction_value,
     fill = factor(ifelse(TRANS_DATE == "Aug-19", "Highlighted", "Normal")))) +
-    geom_col() +
+    geom_col(colour = "black") +
     guides(fill = "none") +
     theme_minimal() +
     labs(x = "Transaction Date",
         y = "Mean Transaction Value",
-        title = "Mean Amount of Money Spent in GL and WM\nOver the Previous Year") +
+        title = "Mean Transaction Value in GL and WM\nOver the Previous Year") +
     theme(text = element_text(size = 30),
         plot.title = element_text(size = 30,
         hjust = 0.5, margin = margin(b = 20), face = "bold"),
-        axis.text.x = element_text(angle = 45))
+        axis.title.y = element_text(margin = margin(r = 10)),
+        axis.text.y = element_text(margin = margin(r = 10)),
+        axis.text.x = element_text(angle = 45)))
 ```
 
 ## Building our Model
 
 ```{r}
+linear_gl_wm_model <- lm(TOTAL_COST ~ TRANS_DATE,
+                  data = gl_wm_data)
+summary(linear_gl_wm_model)
+```
+
+```{r}
 gl_wm_model <- lmer(VALUE ~ TRANS_DATE +
-                   (1 + TRANS_DATA | ITEM_COST),
+                   (1 + TRANS_DATE | ITEM_COST),
                    data = gl_wm_data)
+summary(gl_wm_model)
+```
+
+```{r}
+gl_wm_buildmer <- buildmer(TOTAL_COST ~ TRANS_DATE +
+                           (1 + TRANS_DATE | TRANS_ID) +
+                           (1 + TRANS_DATE | NO_OF_ITEMS) +
+                           (1 + TRANS_DATE | TAX) +
+                           (1 + TRANS_DATE | ITEM_VOL) +
+                           (1 + TRANS_DATE | LOYALTY) +
+                           (1 + TRANS_DATE | LOYALTY_ID) +
+                           (1 + TRANS_DATE | DISCOUNT_CODE) +
+                           (1 + TRANS_DATE | DELIVERY_DATE) +
+                           (1 + TRANS_DATE | DELIVERY_METHOD) +
+                           (1 + TRANS_DATE | DELIVERY_COST) +
+                           (1 + TRANS_DATE | TOTAL_COST) +
+                           (1 + TRANS_DATE | ITEM_VOL),
+                           buildmerControl = buildmerControl(direction = "order"),
+                           data = gl_wm_data)
+summary(gl_wm_buildmer)
+```
+
+```{r}
+gl_wm_model <- lmer(VALUE ~ TRANS_DATE +
+                    (1 | TAX),
+                    data = gl_wm_data)
 summary(gl_wm_model)
 ```
 
 Our next model assesses whether `REGION` had a significant effect on VALUE
 
+## Interactions
+
+### Summary Stats
+
+```{r}
+(interaction_sum <- data %>%
+        group_by(REGION, LOYALTY) %>%
+        summarise(mean = mean(VALUE), sd = sd(VALUE)))
+```
+
+### Visualisation
+
+```{r}
+(interaction_plot <- interaction_sum %>%
+                        ggplot(aes(x = REGION, y = mean, fill = LOYALTY)) +
+                geom_col(colour = "black") +
+                theme_minimal() +
+                labs(x = "Region",
+                     y = "Mean Transaction Value",
+                     title = "Mean Transaction Value across\n All Regions and Loyalty Scheme") +
+                scale_x_discrete(labels = c("EE" = "East of England",
+                                            "EM" = "East Midlands",
+                                            "GL" = "Greater London",
+                                            "NE" = "North East",
+                                            "NW" = "North West",
+                                            "SC" = "Scotland",
+                                            "SE" = "South East",
+                                            "SW" = "South West",
+                                            "WL" = "Wales",
+                                            "WM" = "West Midlands",
+                                            "YH" = "Yorkshire")) +
+                scale_fill_discrete(name = "Customer\nLoyalty",
+                                    labels = c("No", "Yes")) +
+                theme(text = element_text(size = 25),
+                plot.title = element_text(face = "bold",
+                                          margin = margin(b = 20),
+                                          hjust = 0.5),
+                axis.title.x = element_text(vjust = 5),
+                axis.title.y = element_text(margin = margin(r = 10)),
+                axis.text.y = element_text(margin = margin(r = 10)),
+                axis.text.x = element_text(angle = 45, vjust = 0.6)))
+```
+
+### Interaction Model
 
 This final model examines any interactions between LOYALTY and REGION on VALUE. 
 
 ```{r}
-mixed_model <- buildmer(VALUE ~ LOYALTY * REGION +
+mixed_model <- buildmer(VALUE ~ LOYALTY:REGION +
     (1 + LOYALTY * REGION | LOYALTY_ID) +
     (1 + LOYALTY * REGION | TRANS_ID) +
     (1 + LOYALTY * REGION | NO_OF_ITEMS) +
@@ -244,3 +483,12 @@ mixed_model <- buildmer(VALUE ~ LOYALTY * REGION +
     data = data)
 summary(mixed_model)
 ```
+
+```{r}
+march_model_lin <- lmer(VALUE ~ 1 + LOYALTY * REGION + (1 | LOYALTY_ID) + (1 | TRANS_ID), data = march_data)
+emmeans(march_model_lin, pairwise ~ REGION*LOYALTY, adjust = "tukey")
+```
+
+colnames(data)
+
+unique(data$ITEM_VOLUME)
